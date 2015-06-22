@@ -130,6 +130,32 @@ def randomly_downsample_data(array, num_downsample):
         idx_sorted = np.argsort(randomizer)
         return array[idx_sorted[0:num_downsample]]
 
+def draw_randomly_from_data(array, num_realization):
+    """ Method returns a length-num_realization resampling of the input array.
+
+    Parameters 
+    ----------
+    array : array
+        Length N > 1 numpy array storing the data to be sampled. 
+
+    num_realization : int 
+        Size of the output realization of the data
+
+    Returns 
+    -------
+    output : array or Astropy Table
+        Random downsampling of the input array
+
+    Examples 
+    --------
+    >>> x = np.random.uniform(0, 50, 1e2)
+    >>> desired_sample_size = 1e3
+    >>> x_realization = draw_randomly_from_data(x, desired_sample_size)
+    """
+
+    input_array_length = array_like_length(array) 
+    random_indices = np.random.random_integers(0, input_array_length-1, num_realization)
+    return array[random_indices]
 
 
 

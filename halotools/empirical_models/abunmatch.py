@@ -416,6 +416,41 @@ class ConditionalAbunMatch(model_helpers.GalPropModel):
         else:
             return galprop
 
+    def _determine_zero_scatter_relation(self, haloprop_bini, 
+        ibin, num_downsample=1000):
+        """ Method determines the relation between ``sec_haloprop`` and 
+        ``sec_galprop`` that holds in in the i^th ``prim_galprop`` bin. 
+
+        Parameters 
+        ----------
+        haloprop_bini : array 
+            Array of all values of ``sec_haloprop`` for halos in the i^th 
+            ``prim_galprop`` bin. 
+
+        ibin : int 
+            Index of the ``prim_galprop`` bin. 
+
+        num_downsample : int, optional 
+            Size of the sub-sampling that will be used to determine the zero-scatter 
+            mapping between ``sec_haloprop`` and ``sec_galprop``. 
+
+        Returns 
+        -------
+        func : function object 
+            Lookup table function providing mapping between 
+            ``sec_haloprop`` (the input abcissa) and ``sec_galprop`` (the input ordinates)
+        """
+
+        if array_utils.custom_len(haloprop_bini) <= num_downsample:
+            num_downsample = array_utils.custom_len(haloprop_bini)
+
+        downsampled_haloprop = array_utils.randomly_downsample_data(
+            haloprop_bini, num_downsample)
+        downsampled_haloprop.sort()
+
+        galprop = self.one_point_lookup_table[ibin](np.arange(num_downsample))
+        return model_helpers.custom_spline(downsampled_haloprop, galprop, k=2)
+
 
     def build_one_point_lookup_table(self, **kwargs):
         """
