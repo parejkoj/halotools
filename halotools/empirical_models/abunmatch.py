@@ -563,6 +563,151 @@ class ConditionalAbunMatch(model_helpers.GalPropModel):
                 if key not in galaxy_table.keys():
                     galaxy_table[key] = func(galaxy_table=galaxy_table)
 
+    def _alt_mc_galprop(self, seed=None, **kwargs):
+        """
+        Private method controlling the primary algorithm behind the  
+        implementation of conditional abundance matching. 
+        This method will be renamed according to ``self.galprop_key`` in the 
+        instance of `ConditionalAbunMatch`. For example, 
+        if the property being modeled is ``gr_color``, then the 
+        `_mc_galprop` function would instead be named ``mc_gr_color``, 
+        a bound method to the `ConditionalAbunMatch` class instance. 
+
+        Parameters 
+        ----------
+        galaxy_table : data table, optional keyword argument 
+            Astropy Table object storing the mock galaxy population 
+            onto which values of ``self.galprop_key`` will be painted. 
+            If the ``galaxy_table`` keyword argument is not passed, 
+            then the ``halos`` keyword argument must be passed, 
+            but never both. 
+
+        halos : data table, optional keyword argument 
+            Astropy Table object storing the halo population 
+            onto which values of ``self.galprop_key`` will be painted. 
+            If the ``halos`` keyword argument is not passed, 
+            then the ``galaxy_table`` keyword argument must be passed, 
+            but never both. 
+
+        galaxy_table_slice_array : array, optional keyword argument 
+            Array of slice objects. The i^th entry of 
+            ``galaxy_table_slice_array`` stores the slice of 
+            the halo catalog which falls into the i^th 
+            stellar mass bin. Useful if exploring models 
+            with fixed stellar masses. Default is None, 
+            in which case the `_mc_galprop` method determines 
+            this information for itself (at a performance cost). 
+
+        Returns 
+        -------
+        output_galprop : array 
+            Numpy array storing a Monte Carlo realization of 
+            the modeled galaxy property. 
+        """
+        model_helpers.update_param_dict(self, **kwargs)
+        self._set_correlation_strength()
+
+        if ('galaxy_table' in kwargs.keys()) & ('halos' in kwargs.keys()):
+            msg = ("The mc_"+self.galprop_key+" method accepts either " + 
+                "a halos keyword argument, or a galaxy_table keyword argument" + 
+                " but never both.")
+            raise KeyError(msg)
+        elif 'galaxy_table' in kwargs.keys():
+            galaxy_table = kwargs['galaxy_table']
+            operative_sec_haloprop_key = (
+                model_defaults.host_haloprop_prefix + self.sec_haloprop_key)
+        elif 'halos' in kwargs.keys():
+            galaxy_table = kwargs['halos']
+            operative_sec_haloprop_key = self.sec_haloprop_key
+        else:
+            msg = ("The mc_"+self.galprop_key+" requires either " + 
+                "a halos keyword argument, or a galaxy_table keyword argument")
+            raise KeyError(msg)
+
+        self.add_new_haloprops(galaxy_table)
+
+        # All at once, draw all the randoms we will need
+        np.random.seed(seed=seed)
+        all_randoms = np.random.random(len(galaxy_table)*2)
+        galprop_cumprob = all_randoms[0:len(galaxy_table)]
+        galprop_scatter = all_randoms[len(galaxy_table):]
+
+        # Initialize the output array
+        output_galprop = np.zeros(len(galaxy_table))
+
+        # Determine binning and loop range
+        if 'galaxy_table_slice_array' not in kwargs.keys():
+            binned_prim_galprop = np.digitize(
+                galaxy_table[self.prim_galprop_key], 
+                self.prim_galprop_bins)
+            prim_galprop_loop_range = set(binned_prim_galprop)
+        else:
+            prim_galprop_loop_range = range(len(self.one_point_lookup_table))
+
+        for i in prim_galprop_loop_range:
+
+            # Determine the slice corresponding to the i^th prim_galprop bin
+            if 'galaxy_table_slice_array' not in kwargs.keys():
+                idx_bini = np.where(binned_prim_galprop==i)[0]
+                num_bini = len(idx_bini)
+            else:
+                idx_bini = kwargs['galaxy_table_slice_array'][i]
+                num_bini = len(galaxy_table[idx_bini])
+
+            if len(idx_bini) > 0:
+                # Fetch the halos in the i^th prim_galprop bin
+                haloprop_bini = galaxy_table[idx_bini][operative_sec_haloprop_key]
+
+                # Fetch the appropriate number of randoms
+                # for the i^th prim_galprop bin
+                galprop_cumprob_bini = galprop_cumprob[idx_bini]
+                galprop_scatter_bini = galprop_scatter[idx_bini]
+
+                galprop_bini = self._alt_condition_matched_galprop(
+                    haloprop_bini, galprop_cumprob_bini, 
+                    i, galprop_scatter_bini)
+
+                # Assign the final values to the 
+                # appropriately sorted subarray of output_galprop
+                output_galprop[idx_bini] = galprop_bini
+
+        return output_galprop
+
+    def _compute_pearson_difference(r, cumprob, noise):
+        noisy_cumprob = cumprob + r*noise
+        idx_sorted = np.argsort(noisy_cumprob)
+        galprop = (
+            self.one_point_lookup_table[ibin](galprop_cumprob[idx_sorted]))
+        return abs(pearsonr(galprop, sorted_haloprop)[0]-abs(self.correlation_strength[ibin]))
+
+
+    def _alt_condition_matched_galprop(self, haloprop_bini, galprop_cumprob, 
+        ibin, noise):
+
+        zero_scatter_relation_bini = self._determine_zero_scatter_relation(
+            haloprop_bini, i)
+
+
+        if (1 - np.abs(self.correlation_strength[ibin])) < self.tol:
+            galprop = zero_scatter_relation_bini(haloprop_bini)
+
+            return 
+        else:
+            compute_pearson_difference = functools.partial(
+                self._compute_pearson_difference, 
+                cumprob = galprop_cumprob, noise = noise)
+
+            scipy_result = minimize_scalar(compute_pearson_difference, tol=self.tol)
+            noise_weighting = scipy_result.x
+            noisy_galprop_cumprob = galprop_cumprob + noise_weighting*noise
+            idx_sorted = np.argsort(noisy_galprop_cumprob)
+            galprop = (
+                self.one_point_lookup_table[ibin](galprop_cumprob[idx_sorted]))
+
+        if self.correlation_strength[ibin] < 0:
+            return galprop[::-1]
+        else:
+            return galprop
 
 
 
