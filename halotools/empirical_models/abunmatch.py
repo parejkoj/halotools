@@ -340,6 +340,9 @@ class ConditionalAbunMatch(model_helpers.GalPropModel):
 
         self.add_new_haloprops(galaxy_table)
 
+        self.build_haloprop_abun_lookup(input_galaxy_table = galaxy_table, 
+            sec_haloprop_key = operative_sec_haloprop_key)
+
         # All at once, draw all the randoms we will need
         np.random.seed(seed=seed)
         all_randoms = np.random.random(len(galaxy_table)*2)
@@ -453,6 +456,72 @@ class ConditionalAbunMatch(model_helpers.GalPropModel):
         galprop_table = self.galprop_abun_lookup[ibin](np.arange(num_downsample))
 
         return haloprop_table, galprop_table
+
+
+    def build_haloprop_abun_lookup(self, num_downsample=1000, **kwargs):
+        """
+        Method computes lookup tables of the cumulative ``sec_haloprop`` PDF 
+        defined at fixed values of ``prim_galprop`` for the input halos.  
+
+        Parameters 
+        ----------
+        input_galaxy_table : data table, required keyword argument 
+            Astropy Table object storing the input galaxy population.  
+            The conditional one-point functions of this population 
+            will be used as inputs when building the primary behavior 
+            of the `ConditionalAbunMatch` model. 
+
+        operative_sec_haloprop_key : string, required keyword argument 
+            Column key used to access the secondary halo property. 
+
+        num_downsample : int, optional 
+            Size of the sub-sampling that will be used to determine the 
+            mapping between ``sec_haloprop_key`` and halo abundance 
+            at fixed values of ``prim_galprop_key``. 
+
+        """
+        halos = kwargs['input_galaxy_table']
+        operative_sec_haloprop_key = kwargs['sec_haloprop_key']
+
+        self.haloprop_abun_lookup = np.zeros(
+            len(self.prim_galprop_bins)+1, dtype=object)
+
+        binned_prim_galprop = np.digitize(
+            halos[self.prim_galprop_key], 
+            self.prim_galprop_bins)
+
+        for i in range(len(self.haloprop_abun_lookup)):
+            idx_bini = np.where(binned_prim_galprop == i)[0]
+            if model_helpers.custom_len(idx_bini) > self.minimum_sampling:
+                halos_bini = halos[idx_bini]
+                num_downsample = np.min([num_downsample, len(halos_bini)])
+                downsampled_halos_bini = array_utils.draw_randomly_from_data(
+                    halos_bini, num_downsample)
+
+                abcissa = np.arange(len(downsampled_halos_bini))/float(len(downsampled_halos_bini)-1)
+                ordinates = np.sort(downsampled_halos_bini[operative_sec_haloprop_key])
+                self.haloprop_abun_lookup[i] = (
+                    model_helpers.custom_spline(abcissa, ordinates, k=2)
+                    )
+
+        # For all empty lookup tables, fill them with the nearest lookup table
+        unfilled_lookup_table_idx = np.where(
+            self.haloprop_abun_lookup == 0)[0]
+        filled_lookup_table_idx = np.where(
+            self.haloprop_abun_lookup != 0)[0]
+
+        if len(unfilled_lookup_table_idx) > 0:
+            msg = ("When building the one-point lookup table from input halos, " + 
+                "there were some bins of prim_galprop_bins that contained fewer than " + 
+                str(self.minimum_sampling)+ " halos. In such cases, the lookup table " + 
+                "of the nearest sufficiently populated bin will be chosen.")
+            warn(msg)
+        for idx in unfilled_lookup_table_idx:
+            closest_filled_idx_idx = array_utils.find_idx_nearest_val(
+                filled_lookup_table_idx, idx)
+            closest_filled_idx = filled_lookup_table_idx[closest_filled_idx_idx]
+            self.haloprop_abun_lookup[idx] = (
+                self.haloprop_abun_lookup[closest_filled_idx])
 
     def build_galprop_abun_lookup(self, **kwargs):
         """
