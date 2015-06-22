@@ -340,8 +340,8 @@ class ConditionalAbunMatch(model_helpers.GalPropModel):
 
         self.add_new_haloprops(galaxy_table)
 
-        self.build_haloprop_abun_lookup(input_galaxy_table = galaxy_table, 
-            sec_haloprop_key = operative_sec_haloprop_key)
+        # Initialize the output array
+        output_galprop = np.zeros(len(galaxy_table))
 
         # All at once, draw all the randoms we will need
         np.random.seed(seed=seed)
@@ -349,27 +349,21 @@ class ConditionalAbunMatch(model_helpers.GalPropModel):
         galprop_cumprob = all_randoms[0:len(galaxy_table)]
         galprop_scatter = all_randoms[len(galaxy_table):]
 
-        # Initialize the output array
-        output_galprop = np.zeros(len(galaxy_table))
-
         # Determine binning and loop range
-        if 'galaxy_table_slice_array' not in kwargs.keys():
-            binned_prim_galprop = np.digitize(
-                galaxy_table[self.prim_galprop_key], 
-                self.prim_galprop_bins)
-            prim_galprop_loop_range = set(binned_prim_galprop)
-        else:
-            prim_galprop_loop_range = range(len(self.galprop_abun_lookup))
+        binned_prim_galprop = np.digitize(
+            galaxy_table[self.prim_galprop_key], 
+            self.prim_galprop_bins)
+
+        prim_galprop_loop_range = set(binned_prim_galprop)
+        self.build_haloprop_abun_lookup(input_galaxy_table = galaxy_table, 
+            sec_haloprop_key = operative_sec_haloprop_key, 
+            binned_prim_galprop = binned_prim_galprop)
 
         for i in prim_galprop_loop_range:
 
-            # Determine the slice corresponding to the i^th prim_galprop bin
-            if 'galaxy_table_slice_array' not in kwargs.keys():
-                idx_bini = np.where(binned_prim_galprop==i)[0]
-                num_bini = len(idx_bini)
-            else:
-                idx_bini = kwargs['galaxy_table_slice_array'][i]
-                num_bini = len(galaxy_table[idx_bini])
+        # Determine the slice corresponding to the i^th prim_galprop bin
+            idx_bini = np.where(binned_prim_galprop==i)[0]
+            num_bini = len(idx_bini)
 
             if len(idx_bini) > 0:
                 # Fetch the appropriate number of randoms
@@ -474,6 +468,9 @@ class ConditionalAbunMatch(model_helpers.GalPropModel):
         operative_sec_haloprop_key : string, required keyword argument 
             Column key used to access the secondary halo property. 
 
+        binned_prim_galprop : array, required keyword argument 
+            Integer array storing the ``prim_galprop`` bin of ``input_galaxy_table``.  
+
         num_downsample : int, optional 
             Size of the sub-sampling that will be used to determine the 
             mapping between ``sec_haloprop_key`` and halo abundance 
@@ -482,13 +479,10 @@ class ConditionalAbunMatch(model_helpers.GalPropModel):
         """
         halos = kwargs['input_galaxy_table']
         operative_sec_haloprop_key = kwargs['sec_haloprop_key']
+        binned_prim_galprop = kwargs['binned_prim_galprop']
 
         self.haloprop_abun_lookup = np.zeros(
             len(self.prim_galprop_bins)+1, dtype=object)
-
-        binned_prim_galprop = np.digitize(
-            halos[self.prim_galprop_key], 
-            self.prim_galprop_bins)
 
         for i in range(len(self.haloprop_abun_lookup)):
             idx_bini = np.where(binned_prim_galprop == i)[0]
@@ -697,23 +691,24 @@ class ConditionalAbunMatch(model_helpers.GalPropModel):
 
         self.add_new_haloprops(galaxy_table)
 
+        # Initialize the output array
+        output_galprop = np.zeros(len(galaxy_table))
+
         # All at once, draw all the randoms we will need
         np.random.seed(seed=seed)
         all_randoms = np.random.random(len(galaxy_table)*2)
         galprop_cumprob = all_randoms[0:len(galaxy_table)]
         galprop_scatter = all_randoms[len(galaxy_table):]
 
-        # Initialize the output array
-        output_galprop = np.zeros(len(galaxy_table))
-
         # Determine binning and loop range
-        if 'galaxy_table_slice_array' not in kwargs.keys():
-            binned_prim_galprop = np.digitize(
-                galaxy_table[self.prim_galprop_key], 
-                self.prim_galprop_bins)
-            prim_galprop_loop_range = set(binned_prim_galprop)
-        else:
-            prim_galprop_loop_range = range(len(self.galprop_abun_lookup))
+        binned_prim_galprop = np.digitize(
+            galaxy_table[self.prim_galprop_key], 
+            self.prim_galprop_bins)
+
+        prim_galprop_loop_range = set(binned_prim_galprop)
+        self.build_haloprop_abun_lookup(input_galaxy_table = galaxy_table, 
+            sec_haloprop_key = operative_sec_haloprop_key, 
+            binned_prim_galprop = binned_prim_galprop)
 
         for i in prim_galprop_loop_range:
 
@@ -744,17 +739,11 @@ class ConditionalAbunMatch(model_helpers.GalPropModel):
 
         return output_galprop
 
-    def _compute_pearson_difference(r, cumprob, noise, galprop_to_haloprop_map):
+    def _compute_pearson_difference(r, cumprob, noise, sorted_haloprop):
         noisy_cumprob = cumprob + r*noise
         idx_sorted = np.argsort(noisy_cumprob)
         galprop = (
             self.galprop_abun_lookup[ibin](cumprob[idx_sorted]))
-
-
-        ### LEFT OFF HERE 
-        # Actually, what is needed is the one-point map from cumulative abundance to haloprop
-        # at fixed prim_galprop. That's the only necessary ingredient 
-        # to get the sorted_haloprop array used below
 
         return abs(pearsonr(galprop, sorted_haloprop)[0]-abs(self.correlation_strength[ibin]))
 
@@ -770,9 +759,13 @@ class ConditionalAbunMatch(model_helpers.GalPropModel):
         if (1 - np.abs(self.correlation_strength[ibin])) < self.tol:
             galprop = haloprop_to_galprop_mapping_zero_scatter(haloprop_bini)
         else:
+
+            sorted_haloprop_bini = self.haloprop_abun_lookup[ibin](
+                np.arange(len(noise))/float(len(noise)-1))
             compute_pearson_difference = functools.partial(
                 self._compute_pearson_difference, noise = noise, 
-                cumprob = np.arange(len(noise))/float(len(noise)-1))
+                cumprob = np.arange(len(noise))/float(len(noise)-1), 
+                sorted_haloprop=sorted_haloprop_bini)
 
             scipy_result = minimize_scalar(compute_pearson_difference, tol=self.tol)
             noise_weighting = scipy_result.x
