@@ -5,6 +5,7 @@ and conditional abundance matching (CAM).
 
 """
 import numpy as np
+import functools
 
 from scipy.stats import pearsonr
 from scipy.optimize import minimize_scalar
@@ -277,7 +278,7 @@ class ConditionalAbunMatch(model_helpers.GalPropModel):
         if 'new_haloprop_func_dict' in kwargs.keys():
             self.new_haloprop_func_dict = kwargs['new_haloprop_func_dict']
 
-    def _mc_galprop(self, seed=None, **kwargs):
+    def _alt_mc_galprop(self, seed=None, **kwargs):
         """
         Private method controlling the primary algorithm behind the  
         implementation of conditional abundance matching. 
@@ -440,14 +441,15 @@ class ConditionalAbunMatch(model_helpers.GalPropModel):
             Length-num_downsample array of values of the secondary galaxy property 
         """
 
-        if array_utils.custom_len(haloprop_bini) <= num_downsample:
-            num_downsample = array_utils.custom_len(haloprop_bini)
+        if custom_len(haloprop_bini) <= num_downsample:
+            num_downsample = custom_len(haloprop_bini)
 
         haloprop_table = array_utils.randomly_downsample_data(
             haloprop_bini, num_downsample)
         haloprop_table.sort()
 
-        galprop_table = self.galprop_abun_lookup[ibin](np.arange(num_downsample))
+        galprop_table = self.galprop_abun_lookup[ibin](
+            np.arange(num_downsample)/float(num_downsample)-1)
 
         return haloprop_table, galprop_table
 
@@ -628,7 +630,7 @@ class ConditionalAbunMatch(model_helpers.GalPropModel):
                 if key not in galaxy_table.keys():
                     galaxy_table[key] = func(galaxy_table=galaxy_table)
 
-    def _alt_mc_galprop(self, seed=None, **kwargs):
+    def _mc_galprop(self, seed=None, **kwargs):
         """
         Private method controlling the primary algorithm behind the  
         implementation of conditional abundance matching. 
@@ -739,7 +741,7 @@ class ConditionalAbunMatch(model_helpers.GalPropModel):
 
         return output_galprop
 
-    def _compute_pearson_difference(r, cumprob, noise, sorted_haloprop):
+    def _compute_pearson_difference(self, r, cumprob, noise, sorted_haloprop, ibin):
         noisy_cumprob = cumprob + r*noise
         idx_sorted = np.argsort(noisy_cumprob)
         galprop = (
@@ -752,7 +754,7 @@ class ConditionalAbunMatch(model_helpers.GalPropModel):
         ibin, noise):
 
         haloprop_table, galprop_table = self._determine_zero_scatter_relation(
-            haloprop_bini, i)
+            haloprop_bini, ibin)
         haloprop_to_galprop_mapping_zero_scatter = model_helpers.custom_spline(
             haloprop_table, galprop_table, k=2)
 
@@ -762,10 +764,11 @@ class ConditionalAbunMatch(model_helpers.GalPropModel):
 
             sorted_haloprop_bini = self.haloprop_abun_lookup[ibin](
                 np.arange(len(noise))/float(len(noise)-1))
+
             compute_pearson_difference = functools.partial(
-                self._compute_pearson_difference, noise = noise, 
-                cumprob = np.arange(len(noise))/float(len(noise)-1), 
-                sorted_haloprop=sorted_haloprop_bini)
+                self._compute_pearson_difference, 
+                np.arange(len(noise))/float(len(noise)-1), noise, 
+                sorted_haloprop_bini, ibin)
 
             scipy_result = minimize_scalar(compute_pearson_difference, tol=self.tol)
             noise_weighting = scipy_result.x
