@@ -272,7 +272,7 @@ class ConditionalAbunMatch(model_helpers.GalPropModel):
 
         self._build_param_dict(**kwargs)
 
-        self.build_one_point_lookup_table(**kwargs)
+        self.build_galprop_abun_lookup(**kwargs)
 
         if 'new_haloprop_func_dict' in kwargs.keys():
             self.new_haloprop_func_dict = kwargs['new_haloprop_func_dict']
@@ -356,7 +356,7 @@ class ConditionalAbunMatch(model_helpers.GalPropModel):
                 self.prim_galprop_bins)
             prim_galprop_loop_range = set(binned_prim_galprop)
         else:
-            prim_galprop_loop_range = range(len(self.one_point_lookup_table))
+            prim_galprop_loop_range = range(len(self.galprop_abun_lookup))
 
         for i in prim_galprop_loop_range:
 
@@ -396,7 +396,7 @@ class ConditionalAbunMatch(model_helpers.GalPropModel):
             new_randoms = galprop_cumprob + r*randoms
             idx_sorted = np.argsort(new_randoms)
             galprop = (
-                self.one_point_lookup_table[ibin](galprop_cumprob[idx_sorted]))
+                self.galprop_abun_lookup[ibin](galprop_cumprob[idx_sorted]))
             return abs(pearsonr(galprop, sorted_haloprop)[0]-abs(self.correlation_strength[ibin]))
 
         if hasattr(self, 'correlation_strength'):
@@ -404,12 +404,12 @@ class ConditionalAbunMatch(model_helpers.GalPropModel):
             new_randoms = galprop_cumprob + result.x*randoms
             idx_sorted = np.argsort(new_randoms)
             galprop = (
-                self.one_point_lookup_table[ibin](galprop_cumprob[idx_sorted]))
+                self.galprop_abun_lookup[ibin](galprop_cumprob[idx_sorted]))
         else:
             # Zero scatter case
             idx_sorted = np.argsort(galprop_cumprob)
             galprop = (
-                self.one_point_lookup_table[ibin](galprop_cumprob[idx_sorted]))
+                self.galprop_abun_lookup[ibin](galprop_cumprob[idx_sorted]))
 
         if self.correlation_strength[ibin] < 0:
             return galprop[::-1]
@@ -436,23 +436,25 @@ class ConditionalAbunMatch(model_helpers.GalPropModel):
 
         Returns 
         -------
-        func : function object 
-            Lookup table function providing mapping between 
-            ``sec_haloprop`` (the input abcissa) and ``sec_galprop`` (the input ordinates)
+        haloprop_table : array 
+            Length-num_downsample array of values of the secondary halo property 
+
+        galprop_table : array 
+            Length-num_downsample array of values of the secondary galaxy property 
         """
 
         if array_utils.custom_len(haloprop_bini) <= num_downsample:
             num_downsample = array_utils.custom_len(haloprop_bini)
 
-        downsampled_haloprop = array_utils.randomly_downsample_data(
+        haloprop_table = array_utils.randomly_downsample_data(
             haloprop_bini, num_downsample)
-        downsampled_haloprop.sort()
+        haloprop_table.sort()
 
-        galprop = self.one_point_lookup_table[ibin](np.arange(num_downsample))
-        return model_helpers.custom_spline(downsampled_haloprop, galprop, k=2)
+        galprop_table = self.galprop_abun_lookup[ibin](np.arange(num_downsample))
 
+        return haloprop_table, galprop_table
 
-    def build_one_point_lookup_table(self, **kwargs):
+    def build_galprop_abun_lookup(self, **kwargs):
         """
         Method computes lookup tables of the cumulative ``galprop`` PDF 
         defined by ``input_galaxy_table``. 
@@ -472,28 +474,28 @@ class ConditionalAbunMatch(model_helpers.GalPropModel):
         galaxy_table = kwargs['input_galaxy_table']
         prim_galprop_bins = kwargs['prim_galprop_bins']
 
-        self.one_point_lookup_table = np.zeros(
+        self.galprop_abun_lookup = np.zeros(
             len(prim_galprop_bins)+1, dtype=object)
 
         binned_prim_galprop = np.digitize(
             galaxy_table[self.prim_galprop_key], 
             self.prim_galprop_bins)
 
-        for i in range(len(self.one_point_lookup_table)):
+        for i in range(len(self.galprop_abun_lookup)):
             idx_bini = np.where(binned_prim_galprop == i)[0]
             if model_helpers.custom_len(idx_bini) > self.minimum_sampling:
                 gals_bini = galaxy_table[idx_bini]
                 abcissa = np.arange(len(gals_bini))/float(len(gals_bini)-1)
                 ordinates = np.sort(gals_bini[self.galprop_key])
-                self.one_point_lookup_table[i] = (
+                self.galprop_abun_lookup[i] = (
                     model_helpers.custom_spline(abcissa, ordinates, k=2)
                     )
 
         # For all empty lookup tables, fill them with the nearest lookup table
         unfilled_lookup_table_idx = np.where(
-            self.one_point_lookup_table == 0)[0]
+            self.galprop_abun_lookup == 0)[0]
         filled_lookup_table_idx = np.where(
-            self.one_point_lookup_table != 0)[0]
+            self.galprop_abun_lookup != 0)[0]
 
         if len(unfilled_lookup_table_idx) > 0:
             msg = ("When building the one-point lookup table from input_galaxy_table, " + 
@@ -505,8 +507,8 @@ class ConditionalAbunMatch(model_helpers.GalPropModel):
             closest_filled_idx_idx = array_utils.find_idx_nearest_val(
                 filled_lookup_table_idx, idx)
             closest_filled_idx = filled_lookup_table_idx[closest_filled_idx_idx]
-            self.one_point_lookup_table[idx] = (
-                self.one_point_lookup_table[closest_filled_idx])
+            self.galprop_abun_lookup[idx] = (
+                self.galprop_abun_lookup[closest_filled_idx])
 
     def _build_param_dict(self, **kwargs):
         """ Method creates ``self.param_dict`` regulating the strength of 
@@ -642,7 +644,7 @@ class ConditionalAbunMatch(model_helpers.GalPropModel):
                 self.prim_galprop_bins)
             prim_galprop_loop_range = set(binned_prim_galprop)
         else:
-            prim_galprop_loop_range = range(len(self.one_point_lookup_table))
+            prim_galprop_loop_range = range(len(self.galprop_abun_lookup))
 
         for i in prim_galprop_loop_range:
 
@@ -673,36 +675,42 @@ class ConditionalAbunMatch(model_helpers.GalPropModel):
 
         return output_galprop
 
-    def _compute_pearson_difference(r, cumprob, noise):
+    def _compute_pearson_difference(r, cumprob, noise, galprop_to_haloprop_map):
         noisy_cumprob = cumprob + r*noise
         idx_sorted = np.argsort(noisy_cumprob)
         galprop = (
-            self.one_point_lookup_table[ibin](galprop_cumprob[idx_sorted]))
+            self.galprop_abun_lookup[ibin](cumprob[idx_sorted]))
+
+
+        ### LEFT OFF HERE 
+        # Actually, what is needed is the one-point map from cumulative abundance to haloprop
+        # at fixed prim_galprop. That's the only necessary ingredient 
+        # to get the sorted_haloprop array used below
+
         return abs(pearsonr(galprop, sorted_haloprop)[0]-abs(self.correlation_strength[ibin]))
 
 
     def _alt_condition_matched_galprop(self, haloprop_bini, galprop_cumprob, 
         ibin, noise):
 
-        zero_scatter_relation_bini = self._determine_zero_scatter_relation(
+        haloprop_table, galprop_table = self._determine_zero_scatter_relation(
             haloprop_bini, i)
-
+        haloprop_to_galprop_mapping_zero_scatter = model_helpers.custom_spline(
+            haloprop_table, galprop_table, k=2)
 
         if (1 - np.abs(self.correlation_strength[ibin])) < self.tol:
-            galprop = zero_scatter_relation_bini(haloprop_bini)
-
-            return 
+            galprop = haloprop_to_galprop_mapping_zero_scatter(haloprop_bini)
         else:
             compute_pearson_difference = functools.partial(
-                self._compute_pearson_difference, 
-                cumprob = galprop_cumprob, noise = noise)
+                self._compute_pearson_difference, noise = noise, 
+                cumprob = np.arange(len(noise))/float(len(noise)-1))
 
             scipy_result = minimize_scalar(compute_pearson_difference, tol=self.tol)
             noise_weighting = scipy_result.x
             noisy_galprop_cumprob = galprop_cumprob + noise_weighting*noise
             idx_sorted = np.argsort(noisy_galprop_cumprob)
             galprop = (
-                self.one_point_lookup_table[ibin](galprop_cumprob[idx_sorted]))
+                self.galprop_abun_lookup[ibin](galprop_cumprob[idx_sorted]))
 
         if self.correlation_strength[ibin] < 0:
             return galprop[::-1]
