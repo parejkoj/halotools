@@ -54,8 +54,13 @@ def check_spearmanr(model, mock, lower_bound, upper_bound, desired_correlation):
 	mock_subsample = retrieve_prim_galprop_subsample(model, mock, 
 		lower_bound, upper_bound)
 
-	corr = spearmanr(mock_subsample[model.galprop_key], 
-		mock_subsample['halo_'+model.sec_haloprop_key])[0]
+	assert np.all(mock_subsample[model.prim_galprop_key] >= lower_bound)
+	assert np.all(mock_subsample[model.prim_galprop_key] <= upper_bound)
+
+	sec_galprop_array = mock_subsample[model.galprop_key]
+	sec_haloprop_array = mock_subsample['halo_'+model.sec_haloprop_key]
+
+	corr = spearmanr(sec_galprop_array, sec_haloprop_array)[0]
 
 	assert np.allclose(corr, desired_correlation, rtol=0.1)
 
