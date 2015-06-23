@@ -304,7 +304,7 @@ class ConditionalAbunMatch(model_helpers.GalPropModel):
             self.zero_scatter_haloprop_to_galprop[ibin] = UnivariateSpline(
                 haloprop_table, galprop_table, ext=3, k=4)
 
-    def build_haloprop_abun_lookup(self, num_downsample=100, **kwargs):
+    def build_haloprop_abun_lookup(self, num_downsample=1000, **kwargs):
         """
         Method computes lookup tables of the cumulative ``sec_haloprop`` PDF 
         defined at fixed values of ``prim_galprop`` for the input halos.  

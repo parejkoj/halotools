@@ -98,8 +98,13 @@ def test_cam_no_scatter():
 	check_one_point(cam_noscatter, fake_mock_noscatter, fake_data, 
 		lower_bound=5.e10, upper_bound=1.e11)
 
+#	for ibin in range(len(cam_noscatter.prim_galprop_bins)-2):
+	ibin = 15
+	lower_bound = cam_noscatter.prim_galprop_bins[ibin]
+	upper_bound = cam_noscatter.prim_galprop_bins[ibin+1]
+
 	check_spearmanr(cam_noscatter, fake_mock_noscatter, 
-		lower_bound=1.e10, upper_bound=5.e10, desired_correlation=0.99)
+		lower_bound=lower_bound, upper_bound=upper_bound, desired_correlation=0.99)
 
 
 
@@ -138,22 +143,4 @@ def test_cam_gr_color():
 	fake_mock_variable_scatter.galaxy_table[galprop_key] = (
 		cam_variable_scatter.mc_gr_color(galaxy_table = fake_mock_variable_scatter.galaxy_table))
 
-
-	# Check mock with 50% correlation strength
-#	check_range(fake_mock_scatter_50, fake_data)
-#	sm_low, sm_high = 1.e10, 5.e10
-#	check_spearmanr(fake_mock_scatter_50, fake_data, sm_low, sm_high, 0.5)
-
-#	sm_low, sm_high = 5.e10, 1.e11
-#	check_spearmanr(fake_mock_scatter_50, fake_data, sm_low, sm_high, 0.5)
-
-
-
-	# Check mock with variable correlation strength
-#	check_range(fake_mock_variable_scatter, fake_data)
-#	sm_low, sm_high = 1.e10, 5.e10
-#	check_spearmanr(fake_mock_variable_scatter, fake_data, sm_low, sm_high, 0.34)
-
-#	sm_low, sm_high = 5.e10, 1.e11
-#	check_spearmanr(fake_mock_variable_scatter, fake_data, sm_low, sm_high, 0.835)
 
