@@ -414,44 +414,30 @@ class ConditionalAbunMatch(model_helpers.GalPropModel):
         else:
             return galprop
 
-    def _determine_zero_scatter_relation(self, haloprop_bini, 
-        ibin, num_downsample=1000):
+    def _build_zero_scatter_relation_lookup(self):
         """ Method determines the relation between ``sec_haloprop`` and 
         ``sec_galprop`` that holds in in the i^th ``prim_galprop`` bin. 
 
-        Parameters 
-        ----------
-        haloprop_bini : array 
-            Array of all values of ``sec_haloprop`` for halos in the i^th 
-            ``prim_galprop`` bin. 
-
-        ibin : int 
-            Index of the ``prim_galprop`` bin. 
-
-        num_downsample : int, optional 
-            Size of the sub-sampling that will be used to determine the zero-scatter 
-            mapping between ``sec_haloprop`` and ``sec_galprop``. 
-
-        Returns 
-        -------
-        haloprop_table : array 
-            Length-num_downsample array of values of the secondary halo property 
-
-        galprop_table : array 
-            Length-num_downsample array of values of the secondary galaxy property 
         """
 
-        if custom_len(haloprop_bini) <= num_downsample:
-            num_downsample = custom_len(haloprop_bini)
 
-        haloprop_table = array_utils.randomly_downsample_data(
-            haloprop_bini, num_downsample)
-        haloprop_table.sort()
+        table_length = 1000
 
-        galprop_table = self.galprop_abun_lookup[ibin](
-            np.arange(num_downsample)/float(num_downsample)-1)
+        self.zero_scatter_galprop_to_haloprop = np.zeros(
+            len(self.prim_galprop_bins)+1, dtype=object)
+        self.zero_scatter_haloprop_to_galprop = np.zeros(
+            len(self.prim_galprop_bins)+1, dtype=object)
 
-        return haloprop_table, galprop_table
+        abcissa = np.arange(table_length)/(float(table_length)-1)
+
+        for ibin in range(len(self.prim_galprop_bins)+1):
+
+            galprop_table = self.galprop_abun_lookup[ibin](abcissa)
+            haloprop_table = self.haloprop_abun_lookup[ibin](abcissa)
+            self.zero_scatter_galprop_to_haloprop[ibin] = model_helpers.custom_spline(
+                galprop_table, haloprop_table, k=2)
+            self.zero_scatter_haloprop_to_galprop[ibin] = model_helpers.custom_spline(
+                haloprop_table, galprop_table, k=2)
 
 
     def build_haloprop_abun_lookup(self, num_downsample=1000, **kwargs):
@@ -712,6 +698,8 @@ class ConditionalAbunMatch(model_helpers.GalPropModel):
             sec_haloprop_key = operative_sec_haloprop_key, 
             binned_prim_galprop = binned_prim_galprop)
 
+        self._build_zero_scatter_relation_lookup()
+
         for i in prim_galprop_loop_range:
 
             # Determine the slice corresponding to the i^th prim_galprop bin
@@ -741,7 +729,13 @@ class ConditionalAbunMatch(model_helpers.GalPropModel):
 
         return output_galprop
 
-    def _compute_pearson_difference(self, r, cumprob, noise, sorted_haloprop, ibin):
+    def _compute_pearson_difference(self, r, **kwargs):
+        cumprob = kwargs['cumprob']
+        noise = kwargs['noise']
+        ibin = kwargs['ibin']
+        sorted_haloprop = self.haloprop_abun_lookup[ibin](
+                np.arange(len(noise))/float(len(noise)-1))
+
         noisy_cumprob = cumprob + r*noise
         idx_sorted = np.argsort(noisy_cumprob)
         galprop = (
@@ -753,22 +747,16 @@ class ConditionalAbunMatch(model_helpers.GalPropModel):
     def _alt_condition_matched_galprop(self, haloprop_bini, galprop_cumprob, 
         ibin, noise):
 
-        haloprop_table, galprop_table = self._determine_zero_scatter_relation(
-            haloprop_bini, ibin)
-        haloprop_to_galprop_mapping_zero_scatter = model_helpers.custom_spline(
-            haloprop_table, galprop_table, k=2)
-
         if (1 - np.abs(self.correlation_strength[ibin])) < self.tol:
-            galprop = haloprop_to_galprop_mapping_zero_scatter(haloprop_bini)
+            galprop = self.zero_scatter_galprop_to_haloprop[ibin](haloprop_bini)
         else:
 
-            sorted_haloprop_bini = self.haloprop_abun_lookup[ibin](
-                np.arange(len(noise))/float(len(noise)-1))
+            idx_sorted_haloprop_bini = np.argsort(haloprop_bini)
 
             compute_pearson_difference = functools.partial(
                 self._compute_pearson_difference, 
-                np.arange(len(noise))/float(len(noise)-1), noise, 
-                sorted_haloprop_bini, ibin)
+                cumprob=np.arange(len(noise))/float(len(noise)-1), 
+                noise=noise, ibin=ibin)
 
             scipy_result = minimize_scalar(compute_pearson_difference, tol=self.tol)
             noise_weighting = scipy_result.x
@@ -776,6 +764,7 @@ class ConditionalAbunMatch(model_helpers.GalPropModel):
             idx_sorted = np.argsort(noisy_galprop_cumprob)
             galprop = (
                 self.galprop_abun_lookup[ibin](galprop_cumprob[idx_sorted]))
+            galprop = galprop[idx_sorted_haloprop_bini]
 
         if self.correlation_strength[ibin] < 0:
             return galprop[::-1]
