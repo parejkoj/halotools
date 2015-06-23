@@ -300,9 +300,9 @@ class ConditionalAbunMatch(model_helpers.GalPropModel):
             haloprop_table = self.haloprop_abun_lookup[ibin](abcissa)
             
             self.zero_scatter_galprop_to_haloprop[ibin] = UnivariateSpline(
-                galprop_table, haloprop_table, ext=3, k=5)
+                galprop_table, haloprop_table, ext=3, k=4)
             self.zero_scatter_haloprop_to_galprop[ibin] = UnivariateSpline(
-                haloprop_table, galprop_table, ext=3, k=5)
+                haloprop_table, galprop_table, ext=3, k=4)
 
             if ibin==5:
                 self.galprop_table = galprop_table
@@ -352,11 +352,7 @@ class ConditionalAbunMatch(model_helpers.GalPropModel):
                 abcissa = np.arange(len(downsampled_halos_bini))/float(len(downsampled_halos_bini)-1)
                 ordinates = np.sort(downsampled_halos_bini[operative_sec_haloprop_key])
  
-#                self.haloprop_abun_lookup[i] = (
-#                    model_helpers.custom_spline(abcissa, ordinates, k=2)
-#                    )
-
-                self.haloprop_abun_lookup[i] = UnivariateSpline(abcissa, ordinates, k=5, ext=3)
+                self.haloprop_abun_lookup[i] = UnivariateSpline(abcissa, ordinates, k=4, ext=3)
 
         # For all empty lookup tables, fill them with the nearest lookup table
         unfilled_lookup_table_idx = np.where(
@@ -414,7 +410,7 @@ class ConditionalAbunMatch(model_helpers.GalPropModel):
                 #self.galprop_abun_lookup[i] = (
                 #    model_helpers.custom_spline(abcissa, ordinates, k=2)
                 #    )
-                self.galprop_abun_lookup[i] = UnivariateSpline(abcissa, ordinates, k=5, ext=3)
+                self.galprop_abun_lookup[i] = UnivariateSpline(abcissa, ordinates, k=4, ext=3)
 
         # For all empty lookup tables, fill them with the nearest lookup table
         unfilled_lookup_table_idx = np.where(
@@ -622,7 +618,7 @@ class ConditionalAbunMatch(model_helpers.GalPropModel):
         ibin, noise):
 
         if (1 - np.abs(self.correlation_strength[ibin])) < self.tol:
-            galprop = self.zero_scatter_galprop_to_haloprop[ibin](haloprop_bini)
+            galprop = self.zero_scatter_haloprop_to_galprop[ibin](haloprop_bini)
         else:
 
             idx_sorted_haloprop_bini = np.argsort(haloprop_bini)
