@@ -22,10 +22,14 @@ def check_one_point(model, mock, data, **kwargs):
 
 		mock_subsample = retrieve_prim_galprop_subsample(
 			model, mock, lower_bound, upper_bound)
+		assert np.all(mock_subsample[model.prim_galprop_key] <= upper_bound)
+		assert np.all(mock_subsample[model.prim_galprop_key] >= lower_bound)
 		mock_vals = mock_subsample[model.galprop_key]
 
 		data_subsample = retrieve_prim_galprop_subsample(
 			model, data, lower_bound, upper_bound)
+		assert np.all(data_subsample[model.prim_galprop_key] <= upper_bound)
+		assert np.all(data_subsample[model.prim_galprop_key] >= lower_bound)
 		data_vals = data_subsample[model.galprop_key]
 	else:
 		mock_vals = mock.galaxy_table[model.galprop_key]
@@ -53,7 +57,7 @@ def check_spearmanr(model, mock, lower_bound, upper_bound, desired_correlation):
 	corr = spearmanr(mock_subsample[model.galprop_key], 
 		mock_subsample['halo_'+model.sec_haloprop_key])[0]
 
-	assert np.allclose(corr, 0.99, rtol=0.3)
+	assert np.allclose(corr, desired_correlation, rtol=0.1)
 
 #############################################
 
@@ -92,14 +96,6 @@ def test_cam_no_scatter():
 	check_spearmanr(cam_noscatter, fake_mock_noscatter, 
 		lower_bound=1.e10, upper_bound=5.e10, desired_correlation=0.99)
 
-#	check_spearmanr(fake_mock_noscatter, fake_data, sm_low, sm_high, 0.99)
-
-#	check_spearmanr(fake_mock_noscatter, 'stellar_mass', 'gr_color', sec_haloprop_key, 
-#		lower_bound, upper_bound, desired_correlation)
-
-
-#	sm_low, sm_high = 5.e10, 1.e11
-#	check_spearmanr(fake_mock_noscatter, fake_data, sm_low, sm_high, 0.99)
 
 
 def test_cam_gr_color():
