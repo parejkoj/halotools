@@ -10,8 +10,8 @@ from ...sim_manager import FakeMock
 
 def retrieve_prim_galprop_subsample(model, mock, lower_bound, upper_bound):
 	mask = np.where(
-		(mock.galaxy_table[model.prim_galpropkey] > lower_bound) & 
-		(mock.galaxy_table[model.prim_galpropkey] < upper_bound))[0]
+		(mock.galaxy_table[model.prim_galprop_key] > lower_bound) & 
+		(mock.galaxy_table[model.prim_galprop_key] < upper_bound))[0]
 	return mock.galaxy_table[mask]
 
 def check_conditional_one_point(model, mock, data, 
@@ -25,24 +25,39 @@ def check_conditional_one_point(model, mock, data,
 
 	data_mean = data_subsample[mock.galprop_key].mean()
 	mock_mean= mock_subsample[mock.galprop_key].mean()
-	mean_fracdiff = (mock_mean-data_mean)/data_mean
-	assert np.allclose(mean_fracdiff, 0, atol=0.3, rtol=0.3)
 
-def check_range(model, mock, data):
-	min_mock_galprop = mock.galaxy_table[model.galprop_key].min()
-	max_mock_galprop = mock.galaxy_table[model.galprop_key].max()
-	min_data_galprop = data.galaxy_table[model.galprop_key].min()
-	max_data_galprop = data.galaxy_table[model.galprop_key].max()
+	assert np.allclose(data_mean, mock_mean, rtol=0.3)
 
-	assert min_data_galprop > -10
-	assert max_data_galprop < 10
+def check_one_point(model, mock, data, **kwargs):
 
-	assert min_mock_galprop > -10
+	if 'lower_bound' in kwargs.keys():
+		lower_bound = kwargs['lower_bound']
+		upper_bound = kwargs['upper_bound']
 
-#	min_galprop_fracdiff = (min_mock_galprop-min_data_galprop)/min_data_galprop
-#	max_galprop_fracdiff = (max_mock_galprop-max_data_galprop)/max_data_galprop
-#	assert np.allclose(min_galprop_fracdiff, 0, atol=0.3, rtol=0.3)
-#	assert np.allclose(max_galprop_fracdiff, 0, atol=0.3, rtol=0.3)
+		mock_subsample = retrieve_prim_galprop_subsample(
+			model, mock, lower_bound, upper_bound)
+		mock_vals = mock_subsample[model.galprop_key]
+
+		data_subsample = retrieve_prim_galprop_subsample(
+			model, data, lower_bound, upper_bound)
+		data_vals = data_subsample[model.galprop_key]
+	else:
+		mock_vals = mock.galaxy_table[model.galprop_key]
+		data_vals = data.galaxy_table[model.galprop_key]
+
+	# Trim the outliers
+	mock_vals.sort()
+	p5_idx_mock = int(np.round(len(mock_vals)/20.))
+	trimmed_mock = mock_vals[p5_idx_mock:-p5_idx_mock]
+	data_vals.sort()
+	p5_idx_data = int(np.round(len(data_vals)/20.))
+	trimmed_data = mock_vals[p5_idx_data:-p5_idx_data]
+
+	# Check the 5/95 percentile range, the trimmed-mean, and the median
+	assert np.allclose(trimmed_data.min(), trimmed_mock.min(), rtol=0.5)
+	assert np.allclose(trimmed_data.max(), trimmed_mock.max(), rtol=0.5)
+	assert np.allclose(trimmed_data.mean(), trimmed_mock.mean(), rtol=0.5)
+	assert np.allclose(np.median(data_vals), np.median(mock_vals), rtol=0.5)
 
 def check_spearmanr(model, mock, lower_bound, upper_bound, desired_correlation):
 
@@ -81,10 +96,12 @@ def test_cam_no_scatter():
 	assert hasattr(cam_noscatter, 'galprop_key')
 
 	# Check no-scatter mock
-	check_range(cam_noscatter, fake_mock_noscatter, fake_data)
-	#sm_low, sm_high = 1.e10, 5.e10
-	#check_conditional_one_point(fake_mock_noscatter, fake_data, 
-#		'stellar_mass', 'gr_color', sm_low, sm_high)
+	check_one_point(cam_noscatter, fake_mock_noscatter, fake_data)
+	sm_low, sm_high = 1.e10, 5.e10
+	check_one_point(cam_noscatter, fake_mock_noscatter, fake_data, 
+		lower_bound=1.e10, upper_bound=5.e10)
+	check_one_point(cam_noscatter, fake_mock_noscatter, fake_data, 
+		lower_bound=5.e10, upper_bound=1.e11)
 
 #	check_spearmanr(fake_mock_noscatter, fake_data, sm_low, sm_high, 0.99)
 
