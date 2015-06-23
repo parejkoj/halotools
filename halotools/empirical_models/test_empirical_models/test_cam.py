@@ -8,13 +8,13 @@ from ..abunmatch import ConditionalAbunMatch
 from .. import model_defaults
 from ...sim_manager import FakeMock
 
-def retrieve_prim_galprop_subsample(obj, lower_bound, upper_bound):
+def retrieve_prim_galprop_subsample(model, mock, lower_bound, upper_bound):
 	mask = np.where(
-		(obj.galaxy_table[obj.prim_galpropkey] > lower_bound) & 
-		(obj.galaxy_table[obj.prim_galpropkey] < upper_bound))[0]
-	return obj.galaxy_table[mask]
+		(mock.galaxy_table[model.prim_galpropkey] > lower_bound) & 
+		(mock.galaxy_table[model.prim_galpropkey] < upper_bound))[0]
+	return mock.galaxy_table[mask]
 
-def check_conditional_one_point(mock, data, 
+def check_conditional_one_point(model, mock, data, 
 	lower_bound, upper_bound):
 
 	mock_subsample = retrieve_prim_galprop_subsample(mock, 
@@ -28,18 +28,18 @@ def check_conditional_one_point(mock, data,
 	mean_fracdiff = (mock_mean-data_mean)/data_mean
 	assert np.allclose(mean_fracdiff, 0, atol=0.3, rtol=0.3)
 
-def check_range(mock, data):
-	min_mock_galprop = mock.galaxy_table[mock.galprop_key].min()
-	max_mock_galprop = mock.galaxy_table[mock.galprop_key].max()
-	min_data_galprop = data.galaxy_table[mock.galprop_key].min()
-	max_data_galprop = data.galaxy_table[mock.galprop_key].max()
+def check_range(model, mock, data):
+	min_mock_galprop = mock.galaxy_table[model.galprop_key].min()
+	max_mock_galprop = mock.galaxy_table[model.galprop_key].max()
+	min_data_galprop = data.galaxy_table[model.galprop_key].min()
+	max_data_galprop = data.galaxy_table[model.galprop_key].max()
 
 	min_galprop_fracdiff = (min_mock_galprop-min_data_galprop)/min_data_galprop
 	max_galprop_fracdiff = (max_mock_galprop-max_data_galprop)/max_data_galprop
 	assert np.allclose(min_galprop_fracdiff, 0, atol=0.3, rtol=0.3)
 	assert np.allclose(max_galprop_fracdiff, 0, atol=0.3, rtol=0.3)
 
-def check_spearmanr(mock, lower_bound, upper_bound, desired_correlation):
+def check_spearmanr(model, mock, lower_bound, upper_bound, desired_correlation):
 
 	mock_subsample = retrieve_prim_galprop_subsample(mock, 
 		lower_bound, upper_bound)
@@ -73,9 +73,10 @@ def test_cam_no_scatter():
 	fake_mock_noscatter.galaxy_table[galprop_key] = (
 		cam_noscatter.mc_gr_color(galaxy_table = fake_mock_noscatter.galaxy_table))
 
+	assert hasattr(cam_noscatter, 'galprop_key')
 
 	# Check no-scatter mock
-#	check_range(fake_mock_noscatter, fake_data)
+	check_range(cam_noscatter, fake_mock_noscatter, fake_data)
 	#sm_low, sm_high = 1.e10, 5.e10
 	#check_conditional_one_point(fake_mock_noscatter, fake_data, 
 #		'stellar_mass', 'gr_color', sm_low, sm_high)
