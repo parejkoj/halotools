@@ -9,6 +9,7 @@ import functools
 
 from scipy.stats import pearsonr
 from scipy.optimize import minimize_scalar
+from scipy.interpolate import UnivariateSpline
 from astropy.extern import six
 from abc import ABCMeta, abstractmethod, abstractproperty
 
@@ -278,149 +279,12 @@ class ConditionalAbunMatch(model_helpers.GalPropModel):
         if 'new_haloprop_func_dict' in kwargs.keys():
             self.new_haloprop_func_dict = kwargs['new_haloprop_func_dict']
 
-    def _alt_mc_galprop(self, seed=None, **kwargs):
-        """
-        Private method controlling the primary algorithm behind the  
-        implementation of conditional abundance matching. 
-        This method will be renamed according to ``self.galprop_key`` in the 
-        instance of `ConditionalAbunMatch`. For example, 
-        if the property being modeled is ``gr_color``, then the 
-        `_mc_galprop` function would instead be named ``mc_gr_color``, 
-        a bound method to the `ConditionalAbunMatch` class instance. 
-
-        Parameters 
-        ----------
-        galaxy_table : data table, optional keyword argument 
-            Astropy Table object storing the mock galaxy population 
-            onto which values of ``self.galprop_key`` will be painted. 
-            If the ``galaxy_table`` keyword argument is not passed, 
-            then the ``halos`` keyword argument must be passed, 
-            but never both. 
-
-        halos : data table, optional keyword argument 
-            Astropy Table object storing the halo population 
-            onto which values of ``self.galprop_key`` will be painted. 
-            If the ``halos`` keyword argument is not passed, 
-            then the ``galaxy_table`` keyword argument must be passed, 
-            but never both. 
-
-        galaxy_table_slice_array : array, optional keyword argument 
-            Array of slice objects. The i^th entry of 
-            ``galaxy_table_slice_array`` stores the slice of 
-            the halo catalog which falls into the i^th 
-            stellar mass bin. Useful if exploring models 
-            with fixed stellar masses. Default is None, 
-            in which case the `_mc_galprop` method determines 
-            this information for itself (at a performance cost). 
-
-        Returns 
-        -------
-        output_galprop : array 
-            Numpy array storing a Monte Carlo realization of 
-            the modeled galaxy property. 
-        """
-        model_helpers.update_param_dict(self, **kwargs)
-        self._set_correlation_strength()
-
-        if ('galaxy_table' in kwargs.keys()) & ('halos' in kwargs.keys()):
-            msg = ("The mc_"+self.galprop_key+" method accepts either " + 
-                "a halos keyword argument, or a galaxy_table keyword argument" + 
-                " but never both.")
-            raise KeyError(msg)
-        elif 'galaxy_table' in kwargs.keys():
-            galaxy_table = kwargs['galaxy_table']
-            operative_sec_haloprop_key = (
-                model_defaults.host_haloprop_prefix + self.sec_haloprop_key)
-        elif 'halos' in kwargs.keys():
-            galaxy_table = kwargs['halos']
-            operative_sec_haloprop_key = self.sec_haloprop_key
-        else:
-            msg = ("The mc_"+self.galprop_key+" requires either " + 
-                "a halos keyword argument, or a galaxy_table keyword argument")
-            raise KeyError(msg)
-
-        self.add_new_haloprops(galaxy_table)
-
-        # Initialize the output array
-        output_galprop = np.zeros(len(galaxy_table))
-
-        # All at once, draw all the randoms we will need
-        np.random.seed(seed=seed)
-        all_randoms = np.random.random(len(galaxy_table)*2)
-        galprop_cumprob = all_randoms[0:len(galaxy_table)]
-        galprop_scatter = all_randoms[len(galaxy_table):]
-
-        # Determine binning and loop range
-        binned_prim_galprop = np.digitize(
-            galaxy_table[self.prim_galprop_key], 
-            self.prim_galprop_bins)
-
-        prim_galprop_loop_range = set(binned_prim_galprop)
-        self.build_haloprop_abun_lookup(input_galaxy_table = galaxy_table, 
-            sec_haloprop_key = operative_sec_haloprop_key, 
-            binned_prim_galprop = binned_prim_galprop)
-
-        for i in prim_galprop_loop_range:
-
-        # Determine the slice corresponding to the i^th prim_galprop bin
-            idx_bini = np.where(binned_prim_galprop==i)[0]
-            num_bini = len(idx_bini)
-
-            if len(idx_bini) > 0:
-                # Fetch the appropriate number of randoms
-                # for the i^th prim_galprop bin
-                galprop_cumprob_bini = galprop_cumprob[idx_bini]
-                galprop_scatter_bini = galprop_scatter[idx_bini]
-
-                # Fetch the halos in the i^th prim_galprop bin, 
-                # and determine how they are sorted
-                haloprop_bini = galaxy_table[idx_bini][operative_sec_haloprop_key]
-                idx_sorted_haloprop_bini = np.argsort(haloprop_bini)
-
-                galprop_bini = self._condition_matched_galprop(
-                    haloprop_bini[idx_sorted_haloprop_bini], 
-                    galprop_cumprob_bini, i, galprop_scatter_bini, self.tol)
-
-                # Assign the final values to the 
-                # appropriately sorted subarray of output_galprop
-                output_galprop[idx_bini[idx_sorted_haloprop_bini]] = galprop_bini
-
-        return output_galprop
-
-    def _condition_matched_galprop(self, sorted_haloprop, galprop_cumprob, 
-        ibin, randoms, tol):
-
-        def compute_pearson_difference(r):
-            new_randoms = galprop_cumprob + r*randoms
-            idx_sorted = np.argsort(new_randoms)
-            galprop = (
-                self.galprop_abun_lookup[ibin](galprop_cumprob[idx_sorted]))
-            return abs(pearsonr(galprop, sorted_haloprop)[0]-abs(self.correlation_strength[ibin]))
-
-        if hasattr(self, 'correlation_strength'):
-            result = minimize_scalar(compute_pearson_difference, tol=tol)
-            new_randoms = galprop_cumprob + result.x*randoms
-            idx_sorted = np.argsort(new_randoms)
-            galprop = (
-                self.galprop_abun_lookup[ibin](galprop_cumprob[idx_sorted]))
-        else:
-            # Zero scatter case
-            idx_sorted = np.argsort(galprop_cumprob)
-            galprop = (
-                self.galprop_abun_lookup[ibin](galprop_cumprob[idx_sorted]))
-
-        if self.correlation_strength[ibin] < 0:
-            return galprop[::-1]
-        else:
-            return galprop
 
     def _build_zero_scatter_relation_lookup(self):
         """ Method determines the relation between ``sec_haloprop`` and 
         ``sec_galprop`` that holds in in the i^th ``prim_galprop`` bin. 
 
         """
-
-
         table_length = 1000
 
         self.zero_scatter_galprop_to_haloprop = np.zeros(
@@ -434,13 +298,18 @@ class ConditionalAbunMatch(model_helpers.GalPropModel):
 
             galprop_table = self.galprop_abun_lookup[ibin](abcissa)
             haloprop_table = self.haloprop_abun_lookup[ibin](abcissa)
-            self.zero_scatter_galprop_to_haloprop[ibin] = model_helpers.custom_spline(
-                galprop_table, haloprop_table, k=2)
-            self.zero_scatter_haloprop_to_galprop[ibin] = model_helpers.custom_spline(
-                haloprop_table, galprop_table, k=2)
+            
+            self.zero_scatter_galprop_to_haloprop[ibin] = UnivariateSpline(
+                galprop_table, haloprop_table, ext=3, k=5)
+            self.zero_scatter_haloprop_to_galprop[ibin] = UnivariateSpline(
+                haloprop_table, galprop_table, ext=3, k=5)
+
+            if ibin==5:
+                self.galprop_table = galprop_table
+                self.haloprop_table = haloprop_table
 
 
-    def build_haloprop_abun_lookup(self, num_downsample=1000, **kwargs):
+    def build_haloprop_abun_lookup(self, num_downsample=100, **kwargs):
         """
         Method computes lookup tables of the cumulative ``sec_haloprop`` PDF 
         defined at fixed values of ``prim_galprop`` for the input halos.  
@@ -482,9 +351,12 @@ class ConditionalAbunMatch(model_helpers.GalPropModel):
 
                 abcissa = np.arange(len(downsampled_halos_bini))/float(len(downsampled_halos_bini)-1)
                 ordinates = np.sort(downsampled_halos_bini[operative_sec_haloprop_key])
-                self.haloprop_abun_lookup[i] = (
-                    model_helpers.custom_spline(abcissa, ordinates, k=2)
-                    )
+ 
+#                self.haloprop_abun_lookup[i] = (
+#                    model_helpers.custom_spline(abcissa, ordinates, k=2)
+#                    )
+
+                self.haloprop_abun_lookup[i] = UnivariateSpline(abcissa, ordinates, k=5, ext=3)
 
         # For all empty lookup tables, fill them with the nearest lookup table
         unfilled_lookup_table_idx = np.where(
@@ -538,9 +410,11 @@ class ConditionalAbunMatch(model_helpers.GalPropModel):
                 gals_bini = galaxy_table[idx_bini]
                 abcissa = np.arange(len(gals_bini))/float(len(gals_bini)-1)
                 ordinates = np.sort(gals_bini[self.galprop_key])
-                self.galprop_abun_lookup[i] = (
-                    model_helpers.custom_spline(abcissa, ordinates, k=2)
-                    )
+
+                #self.galprop_abun_lookup[i] = (
+                #    model_helpers.custom_spline(abcissa, ordinates, k=2)
+                #    )
+                self.galprop_abun_lookup[i] = UnivariateSpline(abcissa, ordinates, k=5, ext=3)
 
         # For all empty lookup tables, fill them with the nearest lookup table
         unfilled_lookup_table_idx = np.where(
@@ -719,7 +593,7 @@ class ConditionalAbunMatch(model_helpers.GalPropModel):
                 galprop_cumprob_bini = galprop_cumprob[idx_bini]
                 galprop_scatter_bini = galprop_scatter[idx_bini]
 
-                galprop_bini = self._alt_condition_matched_galprop(
+                galprop_bini = self._condition_matched_galprop(
                     haloprop_bini, galprop_cumprob_bini, 
                     i, galprop_scatter_bini)
 
@@ -744,7 +618,7 @@ class ConditionalAbunMatch(model_helpers.GalPropModel):
         return abs(pearsonr(galprop, sorted_haloprop)[0]-abs(self.correlation_strength[ibin]))
 
 
-    def _alt_condition_matched_galprop(self, haloprop_bini, galprop_cumprob, 
+    def _condition_matched_galprop(self, haloprop_bini, galprop_cumprob, 
         ibin, noise):
 
         if (1 - np.abs(self.correlation_strength[ibin])) < self.tol:
