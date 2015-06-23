@@ -14,20 +14,6 @@ def retrieve_prim_galprop_subsample(model, mock, lower_bound, upper_bound):
 		(mock.galaxy_table[model.prim_galprop_key] < upper_bound))[0]
 	return mock.galaxy_table[mask]
 
-def check_conditional_one_point(model, mock, data, 
-	lower_bound, upper_bound):
-
-	mock_subsample = retrieve_prim_galprop_subsample(mock, 
-		lower_bound, upper_bound)
-
-	data_subsample = retrieve_prim_galprop_subsample(data, 
-		lower_bound, upper_bound)
-
-	data_mean = data_subsample[mock.galprop_key].mean()
-	mock_mean= mock_subsample[mock.galprop_key].mean()
-
-	assert np.allclose(data_mean, mock_mean, rtol=0.3)
-
 def check_one_point(model, mock, data, **kwargs):
 
 	if 'lower_bound' in kwargs.keys():
@@ -61,13 +47,13 @@ def check_one_point(model, mock, data, **kwargs):
 
 def check_spearmanr(model, mock, lower_bound, upper_bound, desired_correlation):
 
-	mock_subsample = retrieve_prim_galprop_subsample(mock, 
+	mock_subsample = retrieve_prim_galprop_subsample(model, mock, 
 		lower_bound, upper_bound)
 
-	corr = spearmanr(mock_subsample[mock.galprop_key], 
-		mock_subsample[mock.sec_haloprop_key])[0]
-	corr_fracdiff = (corr-desired_correlation)/desired_correlation
-	assert np.allclose(corr_fracdiff, 0, atol=0.3, rtol=0.3)
+	corr = spearmanr(mock_subsample[model.galprop_key], 
+		mock_subsample['halo_'+model.sec_haloprop_key])[0]
+
+	assert np.allclose(corr, 0.99, rtol=0.3)
 
 #############################################
 
@@ -103,6 +89,9 @@ def test_cam_no_scatter():
 	check_one_point(cam_noscatter, fake_mock_noscatter, fake_data, 
 		lower_bound=5.e10, upper_bound=1.e11)
 
+	check_spearmanr(cam_noscatter, fake_mock_noscatter, 
+		lower_bound=1.e10, upper_bound=5.e10, desired_correlation=0.99)
+
 #	check_spearmanr(fake_mock_noscatter, fake_data, sm_low, sm_high, 0.99)
 
 #	check_spearmanr(fake_mock_noscatter, 'stellar_mass', 'gr_color', sec_haloprop_key, 
@@ -110,8 +99,6 @@ def test_cam_no_scatter():
 
 
 #	sm_low, sm_high = 5.e10, 1.e11
-#	check_conditional_one_point(fake_mock_noscatter, fake_data, 
-#		'stellar_mass', 'gr_color', sm_low, sm_high)
 #	check_spearmanr(fake_mock_noscatter, fake_data, sm_low, sm_high, 0.99)
 
 
@@ -154,13 +141,9 @@ def test_cam_gr_color():
 	# Check mock with 50% correlation strength
 #	check_range(fake_mock_scatter_50, fake_data)
 #	sm_low, sm_high = 1.e10, 5.e10
-#	check_conditional_one_point(fake_mock_scatter_50, fake_data, 
-#		'stellar_mass', 'gr_color', sm_low, sm_high)
 #	check_spearmanr(fake_mock_scatter_50, fake_data, sm_low, sm_high, 0.5)
 
 #	sm_low, sm_high = 5.e10, 1.e11
-#	check_conditional_one_point(fake_mock_scatter_50, fake_data, 
-#		'stellar_mass', 'gr_color', sm_low, sm_high)
 #	check_spearmanr(fake_mock_scatter_50, fake_data, sm_low, sm_high, 0.5)
 
 
@@ -168,12 +151,8 @@ def test_cam_gr_color():
 	# Check mock with variable correlation strength
 #	check_range(fake_mock_variable_scatter, fake_data)
 #	sm_low, sm_high = 1.e10, 5.e10
-#	check_conditional_one_point(fake_mock_variable_scatter, fake_data, 
-#		'stellar_mass', 'gr_color', sm_low, sm_high)
 #	check_spearmanr(fake_mock_variable_scatter, fake_data, sm_low, sm_high, 0.34)
 
 #	sm_low, sm_high = 5.e10, 1.e11
-#	check_conditional_one_point(fake_mock_variable_scatter, fake_data, 
-#		'stellar_mass', 'gr_color', sm_low, sm_high)
 #	check_spearmanr(fake_mock_variable_scatter, fake_data, sm_low, sm_high, 0.835)
 
