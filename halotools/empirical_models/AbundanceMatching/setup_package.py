@@ -8,7 +8,7 @@ ROOT = os.path.relpath(os.path.dirname(__file__))
 
 def get_extensions():
     sources = (
-    	[os.path.join(ROOT, 'wrapper_fiducial_deconvolute.pyx'), 
+    	[os.path.join(ROOT, 'fiducial_deconv_wrapper.pyx'), 
     	os.path.join(ROOT, 'src', 'fiducial_deconvolute.c')]
     	)
     ext = Extension(
