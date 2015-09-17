@@ -1,7 +1,7 @@
 __all__ = ['fiducial_deconvolute']
-import os
+
 import numpy as np
-import numpy.ctypeslib as C
+cimport numpy as np 
 
 cimport fiducial_deconvolute_declarations
 
