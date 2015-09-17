@@ -3,7 +3,7 @@ import os
 import numpy as np
 import numpy.ctypeslib as C
 
-import fiducial_deconvolute_declarations
+cimport fiducial_deconvolute_declarations
 
 # define types
 _double_ctype = C.ndpointer(np.float64, ndim=1, flags='C')
