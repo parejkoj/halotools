@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <math.h>
 
+#include "../include/fiducial_deconvolute.h"
+
 #define GAUSS_CACHE_SIZE 4097
 #define GAUSS_CACHE_CENTER 2048 /* (4097-1)/2 */
 #define GAUSS_CACHE_MAX 8
