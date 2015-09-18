@@ -12,7 +12,7 @@ def get_extensions():
     	os.path.join(ROOT, 'src', 'fiducial_deconvolute.c')]
     	)
     ext = Extension(
-        name="halotools.empirical_models.AbundanceMatching.wrapped_fiducial_deconvolute",
+        name="halotools.empirical_models.AbundanceMatching.fiducial_deconv_wrapper",
         sources=sources)
     return [ext]
 
