@@ -21,7 +21,7 @@ from . import gal_prof_factory
 from . import halo_prof_components
 
 from ..sim_manager.supported_sims import HaloCatalog
-
+from ..sim_manager import sim_defaults
 from ..sim_manager.generate_random_sim import FakeSim
 from ..utils.array_utils import custom_len
 
@@ -86,22 +86,68 @@ class ModelFactory(object):
             Default is set in `~halotools.sim_manager.sim_defaults`. 
 
         """
+        inconsistent_redshift_error_msg = ("Inconsistency between the model redshift = %.2f "
+            "and the snapshot redshift = %.2f.\n"
+            "You should instantiate a new model object if you wish to switch halo catalogs.")
+        inconsistent_simname_error_msg = ("Inconsistency between the simname "
+            "already bound to the existing mock = ``%s`` "
+            "and the simname passed as a keyword argument = ``%s``.\n"
+            "You should instantiate a new model object if you wish to switch halo catalogs.")
+        inconsistent_halo_finder_error_msg = ("Inconsistency between the halo-finder "
+            "already bound to the existing mock = ``%s`` "
+            "and the halo-finder passed as a keyword argument = ``%s``.\n"
+            "You should instantiate a new model object if you wish to switch halo catalogs.")
+
+
+        def test_consistency_with_existing_mock(**kwargs):
+            if 'snapshot' in kwargs:
+                snapshot = kwargs['snapshot']
+                input_redshift = snapshot.redshift 
+                input_simname = snapshot.simname
+                input_halo_finder = snapshot.halo_finder 
+            else: 
+                if 'redshift' in kwargs:
+                    input_redshift = kwargs['redshift']
+                else:
+                    input_redshift = sim_defaults.default_redshift
+                if 'simname' in kwargs:
+                    input_simname = kwargs['simname']
+                else:
+                    input_simname = sim_defaults.default_simname
+                if 'halo_finder' in kwargs:
+                    input_halo_finder = kwargs['halo_finder']
+                else:
+                    input_halo_finder = sim_defaults.default_halo_finder
+
+
+            if abs(input_redshift - self.mock.snapshot.redshift) > 0.05:
+                raise HalotoolsError(inconsistent_redshift_error_msg % (input_redshift, self.mock.snapshot.redshift))
+
+            if input_simname != self.mock.snapshot.simname:
+                raise HalotoolsError(inconsistent_simname_error_msg % (self.mock.snapshot.simname, input_simname))
+
+            if input_halo_finder != self.mock.snapshot.halo_finder:
+                raise HalotoolsError(inconsistent_halo_finder_error_msg % (self.mock.snapshot.halo_finder, input_halo_finder))
 
         if hasattr(self, 'mock'):
-            self.mock.populate()
+            test_consistency_with_existing_mock(**kwargs)
         else:
             if 'snapshot' in kwargs.keys():
                 snapshot = kwargs['snapshot']
-                # we need to delete the 'snapshot' keyword 
-                # or else the call to mock_factories below 
-                # will pass multiple snapshot arguments
-                del kwargs['snapshot']
+                del kwargs['snapshot'] # otherwise the call to mock_factories below has multiple snapshot arguments
             else:
                 snapshot = HaloCatalog(**kwargs)
 
+            if hasattr(self, 'redshift'):
+                if abs(self.redshift - snapshot.redshift) > 0.05:
+                    raise HalotoolsError("Inconsistency between the model redshift = %.2f" 
+                        " and the snapshot redshift = %.2f" % (self.redshift, snapshot.redshift))
+
             mock_factory = self.model_blueprint['mock_factory']
-            mock = mock_factory(snapshot=snapshot, model=self, populate=True)
-            self.mock = mock
+            self.mock = mock_factory(snapshot=snapshot, model=self, populate=False)
+
+
+        self.mock.populate()
 
     def compute_galaxy_clustering(self, num_iterations=5, summary_statistic = 'median', **kwargs):
         """
@@ -231,7 +277,16 @@ class ModelFactory(object):
         else:
             summary_func = np.median
 
-        snapshot = HaloCatalog(preload_halo_table = True, **kwargs)
+
+        halocat_kwargs = {}
+        if 'simname' in kwargs:
+            halocat_kwargs['simname'] = kwargs['simname']
+        if 'desired_redshift' in kwargs:
+            halocat_kwargs['redshift'] = kwargs['desired_redshift']
+        if 'halo_finder' in kwargs:
+            halocat_kwargs['halo_finder'] = kwargs['halo_finder']
+
+        snapshot = HaloCatalog(preload_halo_table = True, **halocat_kwargs)
 
         if 'rbins' in kwargs:
             rbins = kwargs['rbins']
@@ -398,7 +453,15 @@ class ModelFactory(object):
         else:
             summary_func = np.median
 
-        snapshot = HaloCatalog(preload_halo_table = True, **kwargs)
+        halocat_kwargs = {}
+        if 'simname' in kwargs:
+            halocat_kwargs['simname'] = kwargs['simname']
+        if 'desired_redshift' in kwargs:
+            halocat_kwargs['redshift'] = kwargs['desired_redshift']
+        if 'halo_finder' in kwargs:
+            halocat_kwargs['halo_finder'] = kwargs['halo_finder']
+
+        snapshot = HaloCatalog(preload_halo_table = True, **halocat_kwargs)
 
         if 'rbins' in kwargs:
             rbins = kwargs['rbins']
@@ -433,8 +496,6 @@ class ModelFactory(object):
                 rbin_centers, xi_coll[i, :] = self.mock.compute_galaxy_matter_cross_clustering(**kwargs)
             xi = summary_func(xi_coll, axis=0)
             return rbin_centers, xi
-
-
 
 
 class SubhaloModelFactory(ModelFactory):
@@ -810,6 +871,8 @@ class HodModelFactory(ModelFactory):
             # of per-halo gal_type abundance
             occupation_model = self.model_blueprint[gal_type]['occupation']
             self.threshold = occupation_model.threshold
+            if hasattr(occupation_model, 'redshift'):
+                self.redshift = occupation_model.redshift
 
             new_method_name = 'mc_occupation_'+gal_type
             new_method_behavior = self._update_param_dict_decorator(
