@@ -208,7 +208,7 @@ class MockFactory(object):
         comoving_volume = self.snapshot.Lbox**3
         return ngals/float(comoving_volume)
 
-    def compute_galaxy_clustering(self, include_crosscorr = False, **kwargs):
+    def compute_galaxy_clustering(self, include_crosscorr = False, N_threads=1, **kwargs):
         """
         Built-in method for all mock catalogs to compute the galaxy clustering signal. 
 
@@ -238,7 +238,7 @@ class MockFactory(object):
             Default is set in `~halotools.empirical_models.model_defaults` module. 
 
         N_threads : int, optional
-            number of threads to use in calculation. Default is number of cores. 
+            number of threads to use in calculation. Default is 1 thread for a serial calculation. 
 
         Returns 
         --------
@@ -296,11 +296,6 @@ class MockFactory(object):
             msg = ("\nThe compute_galaxy_clustering method is only available "
                 " if the mock_observables sub-package has been compiled\n")
             raise HalotoolsError(msg)
-
-        if 'N_threads' in kwargs:
-            Nthreads = kwargs['N_threads']
-        else:
-            Nthreads = cpu_count()
             
         if 'rbins' in kwargs:
             rbins = kwargs['rbins']
@@ -335,7 +330,7 @@ class MockFactory(object):
             return rbin_centers, xi11, xi12, xi22 
 
 
-    def compute_galaxy_matter_cross_clustering(self, include_complement = False, **kwargs):
+    def compute_galaxy_matter_cross_clustering(self, include_complement = False, N_threads=1, **kwargs):
         """
         Built-in method for all mock catalogs to compute the galaxy-matter cross-correlation function. 
 
@@ -362,6 +357,9 @@ class MockFactory(object):
         rbins : array, optional 
             Bins in which the correlation function will be calculated. 
             Default is set in `~halotools.empirical_models.model_defaults` module. 
+
+        N_threads : int, optional
+            number of threads to use in calculation. Default is 1 thread for a serial calculation. 
 
         Returns 
         --------
@@ -424,7 +422,7 @@ class MockFactory(object):
         ptcl_pos = three_dim_pos_bundle(table = ptcl_table, 
             key1='x', key2='y', key3='z')
 
-        Nthreads = cpu_count()
+
         if 'rbins' in kwargs:
             rbins = kwargs['rbins']
         else:
@@ -462,7 +460,7 @@ class MockFactory(object):
             return rbin_centers, clustering, clustering2 
 
 
-    def compute_fof_group_ids(self, zspace = True, 
+    def compute_fof_group_ids(self, zspace = True, N_threads=1,
         b_perp = model_defaults.default_b_perp, 
         b_para = model_defaults.default_b_para, **kwargs):
         """
@@ -486,6 +484,9 @@ class MockFactory(object):
             normalized by the mean separation between galaxies. 
             Default is set in `~halotools.empirical_models.model_defaults` module. 
 
+        N_threads : int, optional
+            number of threads to use in calculation. Default is 1 thread for a serial calculation. 
+
         Returns 
         --------
         ids : array 
@@ -503,8 +504,6 @@ class MockFactory(object):
             msg = ("\nThe compute_fof_group_ids method is only available "
                 " if the mock_observables sub-package has been compiled\n")
             raise HalotoolsError(msg)
-
-        Nthreads = cpu_count()
 
         x = self.galaxy_table['x']
         y = self.galaxy_table['y']
