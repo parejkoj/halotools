@@ -313,7 +313,7 @@ class MockFactory(object):
             pos = three_dim_pos_bundle(table = self.galaxy_table, 
                 key1='x', key2='y', key3='z', mask=mask, return_complement=False)
             clustering = mock_observables.clustering.tpcf(
-                pos, rbins, period=self.snapshot.Lbox, N_threads=Nthreads)
+                pos, rbins, period=self.snapshot.Lbox, N_threads=N_threads)
             return rbin_centers, clustering
         else:
             # Verify that the complementary mask is non-trivial
@@ -326,7 +326,7 @@ class MockFactory(object):
                 key1='x', key2='y', key3='z', mask=mask, return_complement=True)
             xi11, xi12, xi22 = mock_observables.clustering.tpcf(
                 sample1=pos, rbins=rbins, sample2=pos2, 
-                period=self.snapshot.Lbox, N_threads=Nthreads)
+                period=self.snapshot.Lbox, N_threads=N_threads)
             return rbin_centers, xi11, xi12, xi22 
 
 
@@ -440,7 +440,7 @@ class MockFactory(object):
                 key1='x', key2='y', key3='z', mask=mask, return_complement=False)
             clustering = mock_observables.clustering.tpcf(
                 sample1=pos, rbins=rbins, sample2=ptcl_pos, 
-                period=self.snapshot.Lbox, N_threads=Nthreads, do_auto=False)
+                period=self.snapshot.Lbox, N_threads=N_threads, do_auto=False)
             return rbin_centers, clustering
         else:
             # Verify that the complementary mask is non-trivial
@@ -453,10 +453,10 @@ class MockFactory(object):
                 key1='x', key2='y', key3='z', mask=mask, return_complement=True)
             clustering = mock_observables.clustering.tpcf(
                 sample1=pos, rbins=rbins, sample2=ptcl_pos, 
-                period=self.snapshot.Lbox, N_threads=Nthreads, do_auto=False)
+                period=self.snapshot.Lbox, N_threads=N_threads, do_auto=False)
             clustering2 = mock_observables.clustering.tpcf(
                 sample1=pos2, rbins=rbins, sample2=ptcl_pos, 
-                period=self.snapshot.Lbox, N_threads=Nthreads, do_auto=False)
+                period=self.snapshot.Lbox, N_threads=N_threads, do_auto=False)
             return rbin_centers, clustering, clustering2 
 
 
@@ -515,7 +515,7 @@ class MockFactory(object):
 
         group_finder = mock_observables.FoFGroups(positions=pos, 
             b_perp = b_perp, b_para = b_para, 
-            Lbox = self.snapshot.Lbox, N_threads = Nthreads)
+            Lbox = self.snapshot.Lbox, N_threads = N_threads)
 
         return group_finder.group_ids
 
