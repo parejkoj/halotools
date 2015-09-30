@@ -237,6 +237,9 @@ class MockFactory(object):
             Bins in which the correlation function will be calculated. 
             Default is set in `~halotools.empirical_models.model_defaults` module. 
 
+        N_threads : int, optional
+            number of threads to use in calculation. Default is number of cores. 
+
         Returns 
         --------
         rbin_centers : array 
@@ -294,7 +297,11 @@ class MockFactory(object):
                 " if the mock_observables sub-package has been compiled\n")
             raise HalotoolsError(msg)
 
-        Nthreads = cpu_count()
+        if 'N_threads' in kwargs:
+            Nthreads = kwargs['N_threads']
+        else:
+            Nthreads = cpu_count()
+            
         if 'rbins' in kwargs:
             rbins = kwargs['rbins']
         else:
