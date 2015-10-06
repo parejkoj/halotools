@@ -205,6 +205,9 @@ class ModelFactory(object):
             Bins in which the correlation function will be calculated. 
             Default is set in `~halotools.empirical_models.model_defaults` module. 
 
+        N_threads : int, optional
+            number of threads to use in calculation. Default is 1 thread for a serial calculation. 
+
         Returns 
         --------
         rbin_centers : array 
@@ -379,6 +382,9 @@ class ModelFactory(object):
         rbins : array, optional 
             Bins in which the correlation function will be calculated. 
             Default is set in `~halotools.empirical_models.model_defaults` module. 
+
+        N_threads : int, optional
+            number of threads to use in calculation. Default is 1 thread for a serial calculation. 
 
         Examples 
         ---------
