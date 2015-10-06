@@ -451,7 +451,7 @@ class MockFactory(object):
     def satellite_fraction(self):
         """ Fraction of mock galaxies that are satellites. 
         """
-        satmask = self.galaxy_table['gal_type'] == 'satellites'
+        satmask = self.galaxy_table['gal_type'] != 'centrals'
         return len(self.galaxy_table[satmask]) / float(len(self.galaxy_table))
 
 class HodMockFactory(MockFactory):
@@ -576,6 +576,10 @@ class HodMockFactory(MockFactory):
             for halocatkey in self.additional_haloprops:
                 self.galaxy_table[halocatkey][gal_type_slice] = np.repeat(
                     self.halo_table[halocatkey], self._occupation[gal_type], axis=0)
+
+        self.galaxy_table['x'] = self.galaxy_table['halo_x']
+        self.galaxy_table['y'] = self.galaxy_table['halo_y']
+        self.galaxy_table['z'] = self.galaxy_table['halo_z']
 
         for method in self._remaining_methods_to_call:
             func = getattr(self.model, method)
